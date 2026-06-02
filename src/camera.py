@@ -11,15 +11,14 @@ def open_camera(camera_index=0):
 
 
 def read_frame(camera):
-    success, frames = camera.read()
+    success, frame = camera.read()
 
     if not success:
         raise RuntimeError("Could not read frames from Camera")
     
-    return frames
+    return frame
 
 
 
 def release_camera(camera):
     camera.release()
-    
