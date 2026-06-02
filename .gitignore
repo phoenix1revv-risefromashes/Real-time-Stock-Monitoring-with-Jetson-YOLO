@@ -1,0 +1,37 @@
+# Python virtual environment
+.venv/
+venv/
+env/
+
+# Python cache files
+__pycache__/
+*.py[cod]
+*$py.class
+
+# Environment / secrets
+.env
+.env.*
+
+# VS Code local settings
+.vscode/
+
+# OS files
+.DS_Store
+Thumbs.db
+
+# Generated project outputs
+data/evidence/
+data/logs/
+
+# Keep folders but ignore generated contents
+!data/evidence/.gitkeep
+!data/logs/.gitkeep
+
+# Video/image outputs that may become large
+assets/videos/*.mp4
+assets/videos/*.mov
+assets/videos/*.avi
+
+# Test/runtime artifacts
+*.log
+*.tmp
