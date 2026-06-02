@@ -28,9 +28,7 @@ data/logs/
 !data/logs/.gitkeep
 
 # Video/image outputs that may become large
-assets/videos/*.mp4
-assets/videos/*.mov
-assets/videos/*.avi
+
 
 # Test/runtime artifacts
 *.log

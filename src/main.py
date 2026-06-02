@@ -10,7 +10,7 @@ def main():
 
     while True:
         frame= read_frame(camera)
-        draw_shelf_slots(frame)
+        draw_shelf_slots_and_identify_occupancy(frame)
 
         cv2.imshow("Smart Shelf Monitor: ", frame)
         if cv2.waitKey(1) & 0xFF == ord('q'):
