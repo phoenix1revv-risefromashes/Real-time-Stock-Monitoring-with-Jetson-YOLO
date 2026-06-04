@@ -12,7 +12,7 @@ The current version uses manually defined shelf slots, OpenCV image preprocessin
 
 [![v0.4 Multi-Slot Object Detection Demo](assets/pictures/object_detection_in_multiple_slots.png)](assets/videos/)
 
-**Figure 1. v0.4 multi-slot object detection demo.**  
+**Figure 1. v0.4/0.5 multi-slot object detection demo.**  
 The system detects object presence across multiple predefined shelf regions. In this output, slot **A1** is classified as empty, while **A2** and **A3** are detected as occupied. The display also shows the rendered resolution and camera FPS.
 
 _Click the image above to open the v0.4 video demo._
@@ -21,21 +21,34 @@ _Click the image above to open the v0.4 video demo._
 
 ## Current Status
 
-**Version:** v0.4  
-**Status:** In Progress  
-**Current capability:** Multi-slot object presence detection using predefined shelf regions.
+## Current Status
 
-At this stage, the system can:
+**Current Development Version:** v0.5  
+**Stable Released Version:** v0.4  
+**Status:** In Progress  
+**Current capability:** Config-based multi-slot object presence detection using predefined shelf regions.
+
+The latest development version builds on the stable v0.4 multi-slot detection system. In v0.5, shelf slot coordinates and detection thresholds are moved out of the Python source code and into a YAML configuration file.
+
+The system currently can:
 
 - Open a live camera or video stream.
 - Display real-time video output.
-- Draw predefined shelf slot regions on the frame.
+- Draw multiple predefined shelf slot regions on the frame.
+- Load slot definitions from `configs/shelf_slots.yaml`.
+- Load per-slot detection thresholds from `configs/shelf_slots.yaml`.
 - Analyze each slot independently.
-- Detect whether an object is present inside each slot.
+- Classify each slot as empty or detected/occupied.
 - Display slot labels and detection status directly on the video frame.
 - Show rendered resolution and FPS in the display window title.
+- Preserve the same detection behavior as v0.4 while making the system easier to configure and scale.
 
+v0.5 testing compares the config-based implementation against the v0.4 baseline. Test notes are stored in:
+
+```text
+data/evidence/v0.5_test_notes.md
 ---
+```
 
 ## Project Goal
 
