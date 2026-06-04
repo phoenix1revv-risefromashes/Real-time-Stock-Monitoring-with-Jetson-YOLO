@@ -1,32 +1,15 @@
 import cv2
+import yaml
 
+config_path = "configs/shelf_slots.yaml"
 
+def load_shelf_slots (config_path = config_path):
+    with open(config_path,'r') as file:
+        config = yaml.safe_load(file)
 
-shelf_slots= [
-    { 'name': 'A1',
-     'x': 0,
-     'y': 0,
-     'width': 200,
-     'height': 350     
-     
-     },
+    return config['slots']
 
-     {
-         'name': 'A2',
-         'x': 220,
-         'y' : 0,
-         'width': 415,
-         'height' : 140
-     },
-
-     {
-         'name': 'A3',
-         'x' : 220,
-         'y' : 145,
-         'width': 415,
-         'height': 210
-     }
-]
+shelf_slots = load_shelf_slots()
 
 
 
@@ -62,6 +45,8 @@ def draw_shelf_slots_and_identify_occupancy(frame):
 def check_slot_occupancy(frame, slots):
     x, y, width, height = slots['x'], slots['y'], slots['x']+slots['width'], slots['y']+ slots['height']
 
+    threshold = slots['threshold']
+
     roi =frame[y:y+height, x:x+width]
 
     gray = cv2.cvtColor(roi, cv2.COLOR_BGR2GRAY)
@@ -71,7 +56,7 @@ def check_slot_occupancy(frame, slots):
     edge_pixels =cv2.countNonZero(edges)
     
 
-    return edge_pixels>1500
+    return edge_pixels>threshold
 
 
 
