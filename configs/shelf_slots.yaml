@@ -1,0 +1,23 @@
+slots:
+-name: A1
+x:0
+y:0
+width: 200
+height: 350
+threshold:1500
+
+-name:A2
+x: 220
+y:0
+width:415
+height:140
+threshlod: 1500
+
+-name: A3
+x:220
+y:145
+width:415
+height:210
+threshold:1500
+
+
