@@ -20,11 +20,11 @@ __pycache__/
 Thumbs.db
 
 # Generated project outputs
-data/evidence/
+
 data/logs/
 
 # Keep folders but ignore generated contents
-!data/evidence/.gitkeep
+
 !data/logs/.gitkeep
 
 # Video/image outputs that may become large
