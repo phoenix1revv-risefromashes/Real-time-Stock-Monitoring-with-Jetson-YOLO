@@ -1,5 +1,7 @@
 import cv2
 
+
+
 def open_camera(camera_index=0):
     camera = cv2.VideoCapture(camera_index)
 
@@ -17,6 +19,11 @@ def read_frame(camera):
         raise RuntimeError("Could not read frames from Camera")
     
     return frame
+
+def get_resolution(frame):
+    height, width = frame.shape[:2]
+    return (width, height)
+    
 
 
 

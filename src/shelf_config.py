@@ -1,12 +1,30 @@
 import cv2
 
+
+
 shelf_slots= [
     { 'name': 'A1',
      'x': 0,
      'y': 0,
      'width': 200,
-     'height': 200     
+     'height': 350     
      
+     },
+
+     {
+         'name': 'A2',
+         'x': 220,
+         'y' : 0,
+         'width': 415,
+         'height' : 140
+     },
+
+     {
+         'name': 'A3',
+         'x' : 220,
+         'y' : 145,
+         'width': 415,
+         'height': 210
      }
 ]
 
@@ -37,7 +55,7 @@ def draw_shelf_slots_and_identify_occupancy(frame):
                     color, 
                     2)
 
-        return frame
+    return frame
     
 
 
@@ -53,7 +71,7 @@ def check_slot_occupancy(frame, slots):
     edge_pixels =cv2.countNonZero(edges)
     
 
-    return edge_pixels>400
+    return edge_pixels>1500
 
 
 
