@@ -15,7 +15,7 @@ The current version uses manually defined shelf slots, OpenCV image preprocessin
 **Figure 1. v0.4/0.5 multi-slot object detection demo.**  
 The system detects object presence across multiple predefined shelf regions. In this output, slot **A1** is classified as empty, while **A2** and **A3** are detected as occupied. The display also shows the rendered resolution and camera FPS.
 
-_Click the image above to open the v0.4 video demo._
+_Click the image above to open the  video demos._
 
 ---
 
