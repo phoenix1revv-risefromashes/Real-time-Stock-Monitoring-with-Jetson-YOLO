@@ -13,10 +13,16 @@ def initialize_log_file(log_path = log_path):
             writer = csv.writer(file)
             writer.writerow(["timestamp", "slot_name", "status", "edge_pixels", "threshold"])
 
+
+
 def log_detection(slot_name, status, edge_pixels, threshold, log_path=log_path):
+    initialize_log_file(log_path=log_path)
+   
     timestamp = datetime.now().strftime("%Y-%m-%d  %H:%M:%S")
 
     with open (log_path, mode='a', newline="") as file:
         writer = csv.writer(file)
         writer.writerow([timestamp, slot_name, status, edge_pixels, threshold])
+
+
 
