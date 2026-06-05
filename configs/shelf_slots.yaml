@@ -11,7 +11,7 @@ slots:
     y: 0
     width: 415
     height: 150
-    threshold: 1500
+    threshold: 1800
 
   - name: A3
     x: 220
