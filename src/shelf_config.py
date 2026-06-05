@@ -10,7 +10,7 @@ def load_shelf_slots (config_path = config_path):
     with open(config_path,'r') as file:
         config = yaml.safe_load(file)
 
-    return config['slots']
+        return config['slots']
 
 shelf_slots = load_shelf_slots()
 
