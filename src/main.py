@@ -3,7 +3,7 @@ import time
 
 from camera import open_camera, read_frame, release_camera, get_resolution
 from detection_logger import log_detection, log_event_detection 
-
+from evidence_capture import save_event_evidence
 
 from shelf_config import *
 
@@ -28,6 +28,7 @@ def main():
 
             if previous_status is not None and previous_status != current_status:
                 log_event_detection(slot_name, previous_status, current_status, result['edge_pixels'], result['threshold'])
+                save_event_evidence(processed_frame,slot_name,previous_status,current_status)
 
             previous_slot_status[slot_name] = current_status
                 
@@ -37,7 +38,8 @@ def main():
         if current_time - last_log_time >=log_interval_time:
             for results in detection_results:
                 log_detection(results["slot_name"],results['status'], results['edge_pixels'], results['threshold'])
-        
+                
+               
             last_log_time = current_time
 
 

@@ -29,6 +29,10 @@ data/logs/
 
 # Video/image outputs that may become large
 
+#Runtime Event evidence images
+data/evidence/events/*
+!data/evidence/events/.gitkeep
+
 
 # Test/runtime artifacts
 *.log
