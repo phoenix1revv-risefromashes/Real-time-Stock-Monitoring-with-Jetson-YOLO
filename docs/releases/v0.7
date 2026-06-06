@@ -1,0 +1,42 @@
+## v0.7 — Status-Change Event Logging
+
+This pre-release marks the next stable development milestone of the **Edge Vision Inspection System**.
+
+v0.7 adds status-change event logging to the smart shelf monitoring pipeline. The system can now detect when a slot changes state, such as `Empty → Detected` or `Detected → Empty`, and record that event separately from periodic detection logs.
+
+This makes the project more useful as an inspection and monitoring system because it can now capture meaningful changes instead of only recording repeated periodic snapshots.
+
+### Added
+
+- Added status-change event logging.
+- Added `status_events.csv` runtime event log output.
+- Added event records for slot state transitions.
+- Added previous-status tracking inside the main application loop.
+- Added event log fields:
+  - timestamp
+  - slot name
+  - previous status
+  - current status
+  - edge pixel count
+  - threshold value
+  - event type
+- Preserved existing timed detection logging from v0.6.
+- Kept generated runtime logs ignored by Git.
+
+### Verified
+
+- The camera/video pipeline still runs successfully.
+- A1, A2, and A3 slot detection still displays correctly.
+- Timed detection logging from v0.6 still works.
+- Status-change events are written to `data/logs/status_events.csv`.
+- Event logging records meaningful transitions such as `Empty → Detected` or `Detected → Empty`.
+- Generated runtime CSV files remain ignored by Git.
+- The program exits cleanly when `q` is pressed.
+
+### Pre-release Note
+
+This project is still under active development before v1.0.
+
+v0.7 improves the system by adding event-level monitoring, but the project still uses manually defined shelf regions and classical OpenCV-based image processing. It does not yet include automatic slot detection, low-stock detection, misplaced item detection, or trained AI-based object recognition.
+
+This release should be treated as a stable development milestone, not the final completed version.
