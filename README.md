@@ -8,7 +8,7 @@ The current version uses manually defined shelf slots, OpenCV image preprocessin
 
 ---
 
-## v0.4 Demo — Multi-Slot Object Detection
+## v0.6 Demo — Multi-Slot Object Detection
 
 [![v0.4 Multi-Slot Object Detection Demo](assets/pictures/object_detection_in_multiple_slots.png)](assets/videos/)
 
