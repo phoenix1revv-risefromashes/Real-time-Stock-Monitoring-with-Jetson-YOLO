@@ -35,6 +35,9 @@ def initialize_event_log_file(events_path =event_log_path):
 
 
 def log_event_detection(slot_name, previous_status, current_status, edge_pixels, threshold, events_path=event_log_path ):
+    
+    initialize_event_log_file()
+    
     timestamp = datetime.now().strftime("%Y-%m-%d  %H:%M:%S")
 
     with open(event_log_path, mode='a', newline='') as file:
