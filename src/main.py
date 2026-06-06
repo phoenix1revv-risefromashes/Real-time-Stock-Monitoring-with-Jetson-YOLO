@@ -2,7 +2,7 @@ import cv2
 import time
 
 from camera import open_camera, read_frame, release_camera, get_resolution
-from detection_logger import log_detection
+from detection_logger import log_detection, log_event_detection 
 
 
 from shelf_config import *
@@ -14,10 +14,23 @@ def main():
     camera = open_camera(camera_index=0)
     log_interval_time = 2
     last_log_time = 0
+    previous_slot_status = {}
 
     while True:
         frame= read_frame(camera)
         processed_frame, detection_results = draw_shelf_slots_and_identify_occupancy(frame)
+
+        for result in detection_results:
+            slot_name = result['slot_name']
+            current_status = result['status']
+            
+            previous_status = previous_slot_status.get(slot_name)
+
+            if previous_status is not None and previous_status != current_status:
+                log_event_detection(slot_name, previous_status, current_status, result['edge_pixels'], result['threshold'])
+
+            previous_slot_status[slot_name] = current_status
+                
 
         current_time = time.time()
 
