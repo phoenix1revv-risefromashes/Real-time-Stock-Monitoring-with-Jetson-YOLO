@@ -12,6 +12,12 @@ from shelf_config import *
 
 def main():
     camera = open_camera(camera_index=0)
+    
+    camera.set(cv2.CAP_PROP_FRAME_WIDTH, 1920)
+    camera.set(cv2.CAP_PROP_FRAME_HEIGHT, 1080)
+    camera.set(cv2.CAP_PROP_FOURCC, cv2.VideoWriter_fourcc(*"MJPG"))
+    camera.set(cv2.CAP_PROP_FPS,30)
+
     log_interval_time = 2
     last_log_time = 0
     previous_slot_status = {}
