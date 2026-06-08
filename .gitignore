@@ -38,7 +38,12 @@ data/evidence/events/*
 *.log
 *.tmp
 
-#dataset for deep learning
-data/dataset/*
+# Dataset for deep learning
+data/dataset/**
+!data/dataset/
 !data/dataset/.gitkeep
+!data/dataset/automatic_slot_detection/
+!data/dataset/automatic_slot_detection/.gitkeep
+!data/dataset/automatic_slot_detection/raw/
+!data/dataset/automatic_slot_detection/raw/.gitkeep
 datasets/
