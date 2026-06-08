@@ -37,3 +37,8 @@ data/evidence/events/*
 # Test/runtime artifacts
 *.log
 *.tmp
+
+#dataset for deep learning
+data/dataset/*
+!data/dataset/.gitkeep
+datasets/
