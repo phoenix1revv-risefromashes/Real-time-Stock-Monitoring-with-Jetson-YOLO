@@ -43,6 +43,54 @@ def open_camera():
     return camera
 
 
+def order_points(points):
+    points = np.array(points, dtype=np.float32)
+
+    ordered = np.zeros((4, 2), dtype=np.float32)
+
+    point_sums = points.sum(axis=1)
+    point_diffs = np.diff(points, axis=1).reshape(-1)
+
+    ordered[0] = points[np.argmin(point_sums)]
+    ordered[2] = points[np.argmax(point_sums)]
+    ordered[1] = points[np.argmin(point_diffs)]
+    ordered[3] = points[np.argmax(point_diffs)]
+
+    return ordered.astype(np.int32)
+
+
+def create_clean_slot_polygon(raw_polygon):
+    raw_polygon = np.array(raw_polygon, dtype=np.int32)
+
+    hull = cv2.convexHull(raw_polygon)
+    perimeter = cv2.arcLength(hull, True)
+
+    for epsilon_ratio in [0.01, 0.02, 0.03, 0.04, 0.05, 0.07, 0.10, 0.12]:
+        approx = cv2.approxPolyDP(hull, epsilon_ratio * perimeter, True)
+
+        if len(approx) == 4:
+            points = approx.reshape(4, 2)
+            return order_points(points)
+
+    rectangle = cv2.minAreaRect(raw_polygon)
+    box_points = cv2.boxPoints(rectangle)
+
+    return order_points(box_points)
+
+
+def get_polygon_center(polygon):
+    moments = cv2.moments(polygon)
+
+    if moments["m00"] == 0:
+        center = polygon.mean(axis=0)
+        return float(center[0]), float(center[1])
+
+    center_x = moments["m10"] / moments["m00"]
+    center_y = moments["m01"] / moments["m00"]
+
+    return float(center_x), float(center_y)
+
+
 def extract_shelf_base_detections(result):
     detections = []
 
@@ -57,25 +105,33 @@ def extract_shelf_base_detections(result):
         if class_name != TARGET_CLASS_NAME:
             continue
 
-        polygon_points = result.masks.xy[index]
+        raw_polygon_points = result.masks.xy[index]
 
-        if polygon_points is None or len(polygon_points) < 3:
+        if raw_polygon_points is None or len(raw_polygon_points) < 3:
             continue
 
-        polygon = np.array(polygon_points, dtype=np.int32)
-        area_pixels = float(cv2.contourArea(polygon))
+        raw_polygon = np.array(raw_polygon_points, dtype=np.int32)
+        clean_polygon = create_clean_slot_polygon(raw_polygon)
 
-        x1, y1, x2, y2 = box.xyxy[0].tolist()
+        raw_area_pixels = float(cv2.contourArea(raw_polygon))
+        clean_area_pixels = float(cv2.contourArea(clean_polygon))
+
+        center_x, center_y = get_polygon_center(clean_polygon)
+
+        x1, y1, x2, y2 = cv2.boundingRect(clean_polygon)
+        bbox = [float(x1), float(y1), float(x1 + x2), float(y1 + y2)]
 
         detections.append(
             {
                 "slot_name": "",
                 "confidence": confidence,
-                "area_pixels": area_pixels,
-                "center_x": float((x1 + x2) / 2),
-                "center_y": float((y1 + y2) / 2),
-                "bbox": [float(x1), float(y1), float(x2), float(y2)],
-                "polygon": polygon,
+                "reference_area_pixels": clean_area_pixels,
+                "raw_model_area_pixels": raw_area_pixels,
+                "center_x": center_x,
+                "center_y": center_y,
+                "bbox": bbox,
+                "polygon": clean_polygon,
+                "raw_polygon": raw_polygon,
             }
         )
 
@@ -96,11 +152,11 @@ def draw_overlay(frame, detections):
     display_frame = cv2.addWeighted(overlay, 0.35, frame, 0.65, 0)
 
     for detection in detections:
-        cv2.polylines(display_frame, [detection["polygon"]], True, (0, 255, 255), 2)
+        cv2.polylines(display_frame, [detection["polygon"]], True, (0, 255, 255), 3)
 
         label = (
             f"{detection['slot_name']} | "
-            f"{detection['area_pixels']:.0f}px | "
+            f"{detection['reference_area_pixels']:.0f}px | "
             f"{detection['confidence']:.2f}"
         )
 
@@ -116,7 +172,7 @@ def draw_overlay(frame, detections):
 
     cv2.putText(
         display_frame,
-        "Enrollment Mode | e: save | q: quit",
+        "Enrollment Mode | e: save clean slot bases | q: quit",
         (30, 50),
         cv2.FONT_HERSHEY_SIMPLEX,
         1.0,
@@ -140,6 +196,7 @@ def save_reference(detections, model_path):
             "fps": FRAME_FPS,
         },
         "reference_class": TARGET_CLASS_NAME,
+        "slot_shape": "clean_4_point_polygon",
         "slots": [],
     }
 
@@ -147,12 +204,14 @@ def save_reference(detections, model_path):
         reference_data["slots"].append(
             {
                 "name": detection["slot_name"],
-                "reference_area_pixels": detection["area_pixels"],
+                "reference_area_pixels": detection["reference_area_pixels"],
+                "raw_model_area_pixels": detection["raw_model_area_pixels"],
                 "confidence": detection["confidence"],
                 "center_x": detection["center_x"],
                 "center_y": detection["center_y"],
                 "bbox": detection["bbox"],
                 "polygon": detection["polygon"].tolist(),
+                "raw_polygon": detection["raw_polygon"].tolist(),
             }
         )
 
@@ -162,6 +221,9 @@ def save_reference(detections, model_path):
     print(f"Saved: {REFERENCE_PATH}")
     print(f"Slots saved: {len(detections)}")
 
+    for slot in reference_data["slots"]:
+        print(f"{slot['name']}: {slot['reference_area_pixels']:.0f}px")
+
 
 def main():
     model_path = find_model_path()
@@ -169,7 +231,7 @@ def main():
     camera = open_camera()
 
     print(f"Using model: {model_path}")
-    print("Press 'e' to save shelf-base reference.")
+    print("Press 'e' to save clean shelf-base reference.")
     print("Press 'q' to quit.")
 
     latest_detections = []
