@@ -1,5 +1,7 @@
 from collections import deque
 from pathlib import Path
+from datetime import datetime
+import csv
 import json
 
 import cv2
@@ -9,6 +11,9 @@ from ultralytics import YOLO
 
 MODEL_DIR = Path("model")
 REFERENCE_PATH = Path("configs/shelf_base_reference.json")
+
+LOG_DIR = Path("logs")
+EVENT_LOG_PATH = LOG_DIR / "live_stock_events.csv"
 
 CAMERA_INDEX = 0
 FRAME_WIDTH = 1920
@@ -27,7 +32,7 @@ MIN_ITEM_AREA_PIXELS = 300
 MAX_ITEM_TO_SLOT_AREA_RATIO = 0.90
 ROI_PADDING = 40
 
-STOCK_PERCENT_OFFSET = 10.0
+STOCK_PERCENT_OFFSET = 15.0
 EMPTY_DEADBAND_PERCENT = 10.0
 
 ITEM_ROI_OFFSET_X = 0
@@ -333,24 +338,24 @@ def get_item_type(has_book, has_can):
 
 def get_slot_color(slot):
     if slot["item_type"] == "Mixed Items":
-        return (0, 0, 255)        # Red
+        return (0, 0, 255)
 
     if slot["stock_status"] == "Empty / Need Restock ASAP":
-        return (0, 0, 255)        # Red
+        return (0, 0, 255)
 
     if slot["stock_status"] == "Low Stock / Restock Soon":
-        return (0, 255, 255)      # Yellow
+        return (0, 255, 255)
 
     if slot["stock_status"] == "Partial / Light Restocking":
-        return (0, 165, 255)      # Orange
+        return (0, 165, 255)
 
     if slot["stock_status"] == "Almost Full / No Restocking":
-        return (255, 0, 0)        # Blue
+        return (255, 0, 0)
 
     if slot["stock_status"] == "Full / No Restocking":
-        return (0, 255, 0)        # Green
+        return (0, 255, 0)
 
-    return (255, 255, 255)        # White fallback
+    return (255, 255, 255)
 
 
 def update_stock_levels(slots, histories):
@@ -379,6 +384,105 @@ def update_stock_levels(slots, histories):
         slot["stock_percent"] = stock_percent
         slot["stock_status"] = get_stock_status(stock_percent)
         slot["item_type"] = get_item_type(slot["has_book"], slot["has_can"])
+
+
+def ensure_event_log_file():
+    LOG_DIR.mkdir(parents=True, exist_ok=True)
+
+    if EVENT_LOG_PATH.exists():
+        return
+
+    with open(EVENT_LOG_PATH, "w", newline="") as file:
+        writer = csv.writer(file)
+
+        writer.writerow(
+            [
+                "timestamp",
+                "slot_name",
+                "previous_stock_status",
+                "current_stock_status",
+                "previous_item_type",
+                "current_item_type",
+                "stock_percent",
+                "event_type",
+            ]
+        )
+
+
+def get_current_slot_state(slot):
+    return {
+        "stock_status": slot["stock_status"],
+        "item_type": slot["item_type"],
+        "stock_percent": slot["stock_percent"],
+    }
+
+
+def get_event_type(previous_state, current_state):
+    stock_changed = previous_state["stock_status"] != current_state["stock_status"]
+    item_changed = previous_state["item_type"] != current_state["item_type"]
+
+    if stock_changed and item_changed:
+        return "stock_and_item_change"
+
+    if stock_changed:
+        return "stock_status_change"
+
+    if item_changed:
+        return "item_type_change"
+
+    return None
+
+
+def write_event_log(slot_name, previous_state, current_state, event_type):
+    timestamp = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+
+    with open(EVENT_LOG_PATH, "a", newline="") as file:
+        writer = csv.writer(file)
+
+        writer.writerow(
+            [
+                timestamp,
+                slot_name,
+                previous_state["stock_status"],
+                current_state["stock_status"],
+                previous_state["item_type"],
+                current_state["item_type"],
+                f"{current_state['stock_percent']:.1f}",
+                event_type,
+            ]
+        )
+
+
+def log_slot_events(slots, previous_slot_states):
+    for slot in slots:
+        slot_name = slot["name"]
+        current_state = get_current_slot_state(slot)
+
+        previous_state = previous_slot_states.get(slot_name)
+
+        if previous_state is None:
+            previous_slot_states[slot_name] = current_state
+            continue
+
+        event_type = get_event_type(previous_state, current_state)
+
+        if event_type is not None:
+            write_event_log(
+                slot_name,
+                previous_state,
+                current_state,
+                event_type,
+            )
+
+            print(
+                f"[EVENT] {slot_name}: "
+                f"{previous_state['stock_status']} -> {current_state['stock_status']} | "
+                f"{previous_state['item_type']} -> {current_state['item_type']} | "
+                f"{current_state['stock_percent']:.1f}% | "
+                f"{event_type}"
+            )
+
+        previous_slot_states[slot_name] = current_state
 
 
 def draw_text_block(frame, lines, x, y, color):
@@ -466,6 +570,10 @@ def main():
         for slot in slots
     }
 
+    previous_slot_states = {}
+
+    ensure_event_log_file()
+
     camera = open_camera()
 
     reference_masks_ready = False
@@ -473,6 +581,7 @@ def main():
 
     print(f"Using model: {model_path}")
     print(f"Using reference: {REFERENCE_PATH}")
+    print(f"Logging events to: {EVENT_LOG_PATH}")
     print("Processing only enrolled shelf/item ROI.")
     print("Press 'q' to quit.")
 
@@ -505,6 +614,7 @@ def main():
         match_shelf_base_to_slots(detections, slots, frame.shape)
         match_items_to_slots(detections, slots, frame.shape)
         update_stock_levels(slots, histories)
+        log_slot_events(slots, previous_slot_states)
 
         display_frame = draw_slot_results(frame, slots)
 
