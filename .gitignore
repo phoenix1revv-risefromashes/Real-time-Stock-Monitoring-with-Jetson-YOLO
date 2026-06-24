@@ -26,13 +26,40 @@ Thumbs.db
 *.tmp
 
 # Dataset for deep learning
-data/**/*.csv
-data/**/*.log
-data/**/*.tmp
-data/**/*.png
-data/**/*.jpg
-data/**/*.jpeg
-data/**/*.webp
-data/**/*.mp4
-data/**/*.avi
-data/**/*.mov
+# =========================
+# Dataset structure
+# =========================
+
+# Ignore raw dataset media
+data/dataset/raw/**/*.jpg
+data/dataset/raw/**/*.jpeg
+data/dataset/raw/**/*.png
+data/dataset/raw/**/*.webp
+data/dataset/raw/**/*.mp4
+data/dataset/raw/**/*.avi
+data/dataset/raw/**/*.mov
+
+# Ignore processed dataset images
+data/dataset/processed/**/*.jpg
+data/dataset/processed/**/*.jpeg
+data/dataset/processed/**/*.png
+data/dataset/processed/**/*.webp
+
+# Ignore YOLO label files
+data/dataset/processed/**/*.txt
+
+# Ignore dataset logs/temp files
+data/dataset/**/*.csv
+data/dataset/**/*.log
+data/dataset/**/*.tmp
+
+# But keep folder placeholders
+!data/dataset/**/.gitkeep
+
+# Keep small useful dataset config/docs files
+!data/dataset/**/*.yaml
+!data/dataset/**/*.yml
+!data/dataset/**/*.json
+!data/dataset/**/*.md
+
+data/evidence/
