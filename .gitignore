@@ -19,21 +19,47 @@ __pycache__/
 .DS_Store
 Thumbs.db
 
-# Generated project outputs
-
-data/logs/
-
-# Keep folders but ignore generated contents
-
-!data/logs/.gitkeep
-
-# Video/image outputs that may become large
-
-#Runtime Event evidence images
-data/evidence/events/*
-!data/evidence/events/.gitkeep
 
 
 # Test/runtime artifacts
 *.log
 *.tmp
+
+# Dataset for deep learning
+# =========================
+# Dataset structure
+# =========================
+
+# Ignore raw dataset media
+data/dataset/raw/**/*.jpg
+data/dataset/raw/**/*.jpeg
+data/dataset/raw/**/*.png
+data/dataset/raw/**/*.webp
+data/dataset/raw/**/*.mp4
+data/dataset/raw/**/*.avi
+data/dataset/raw/**/*.mov
+
+# Ignore processed dataset images
+data/dataset/processed/**/*.jpg
+data/dataset/processed/**/*.jpeg
+data/dataset/processed/**/*.png
+data/dataset/processed/**/*.webp
+
+# Ignore YOLO label files
+data/dataset/processed/**/*.txt
+
+# Ignore dataset logs/temp files
+data/dataset/**/*.csv
+data/dataset/**/*.log
+data/dataset/**/*.tmp
+
+# But keep folder placeholders
+!data/dataset/**/.gitkeep
+
+# Keep small useful dataset config/docs files
+!data/dataset/**/*.yaml
+!data/dataset/**/*.yml
+!data/dataset/**/*.json
+!data/dataset/**/*.md
+
+data/evidence/
