@@ -32,9 +32,6 @@ MIN_ITEM_AREA_PIXELS = 300
 MAX_ITEM_TO_SLOT_AREA_RATIO = 0.90
 ROI_PADDING = 40
 
-STOCK_PERCENT_OFFSET = 15.0
-EMPTY_DEADBAND_PERCENT = 10.0
-
 ITEM_ROI_OFFSET_X = 0
 ITEM_ROI_OFFSET_Y = -120
 
@@ -462,6 +459,9 @@ def ensure_event_log_file():
                 "current_stock_status",
                 "previous_item_type",
                 "current_item_type",
+                "previous_item_count",
+                "current_item_count",
+                "max_item_capacity",
                 "stock_percent",
                 "event_type",
             ]
@@ -472,6 +472,8 @@ def get_current_slot_state(slot):
     return {
         "stock_status": slot["stock_status"],
         "item_type": slot["item_type"],
+        "total_item_count": slot["total_item_count"],
+        "max_item_capacity": slot["max_item_capacity"],
         "stock_percent": slot["stock_percent"],
     }
 
@@ -479,6 +481,7 @@ def get_current_slot_state(slot):
 def get_event_type(previous_state, current_state):
     stock_changed = previous_state["stock_status"] != current_state["stock_status"]
     item_changed = previous_state["item_type"] != current_state["item_type"]
+    count_changed = previous_state["total_item_count"] != current_state["total_item_count"]
 
     if stock_changed and item_changed:
         return "stock_and_item_change"
@@ -488,6 +491,9 @@ def get_event_type(previous_state, current_state):
 
     if item_changed:
         return "item_type_change"
+
+    if count_changed:
+        return "item_count_change"
 
     return None
 
@@ -506,6 +512,9 @@ def write_event_log(slot_name, previous_state, current_state, event_type):
                 current_state["stock_status"],
                 previous_state["item_type"],
                 current_state["item_type"],
+                previous_state["total_item_count"],
+                current_state["total_item_count"],
+                current_state["max_item_capacity"],
                 f"{current_state['stock_percent']:.1f}",
                 event_type,
             ]
@@ -537,11 +546,42 @@ def log_slot_events(slots, previous_slot_states):
                 f"[EVENT] {slot_name}: "
                 f"{previous_state['stock_status']} -> {current_state['stock_status']} | "
                 f"{previous_state['item_type']} -> {current_state['item_type']} | "
+                f"{previous_state['total_item_count']} -> {current_state['total_item_count']} items | "
                 f"{current_state['stock_percent']:.1f}% | "
                 f"{event_type}"
             )
 
         previous_slot_states[slot_name] = current_state
+
+
+def print_count_debug(frame_index, detections, slots):
+    if not COUNT_DEBUG:
+        return
+
+    if frame_index % DEBUG_EVERY_N_FRAMES != 0:
+        return
+
+    print()
+    print(f"[COUNT DEBUG] Frame {frame_index}")
+    print(f"YOLO visible item instances detected: {len(detections)}")
+
+    for detection in detections:
+        print(
+            f"  detection={detection['class_name']} "
+            f"conf={detection['confidence']:.2f} "
+            f"area={detection['area_pixels']:.1f} "
+            f"center=({detection['center_x']:.0f}, {detection['center_y']:.0f})"
+        )
+
+    for slot in slots:
+        print(
+            f"  {slot['name']}: "
+            f"items={slot['total_item_count']} / {slot['max_item_capacity']} "
+            f"books={slot['book_count']} "
+            f"cans={slot['can_count']} "
+            f"stock={slot['stock_percent']:.1f}% "
+            f"type={slot['item_type']}"
+        )
 
 
 def draw_text_block(frame, lines, x, y, color):
@@ -630,10 +670,6 @@ def main():
 
     ensure_event_log_file()
 
-    previous_slot_states = {}
-
-    ensure_event_log_file()
-
     camera = open_camera()
 
     reference_masks_ready = False
@@ -643,6 +679,7 @@ def main():
     print(f"Using model: {model_path}")
     print(f"Using reference: {REFERENCE_PATH}")
     print(f"Logging events to: {EVENT_LOG_PATH}")
+    print(f"Temporal smoothing window: {SMOOTHING_WINDOW} frames")
     print("Processing only enrolled shelf/item ROI.")
     print("Press 'q' to quit.")
 
@@ -675,8 +712,10 @@ def main():
 
         reset_live_slot_values(slots)
         match_items_to_slots(detections, slots, frame.shape)
-        update_stock_levels(slots, histories)
+        smooth_slot_counts(slots)          # ← stabilise counts before scoring
+        update_stock_levels(slots)
         log_slot_events(slots, previous_slot_states)
+        print_count_debug(frame_index, detections, slots)
 
         display_frame = draw_slot_results(frame, slots)
 
