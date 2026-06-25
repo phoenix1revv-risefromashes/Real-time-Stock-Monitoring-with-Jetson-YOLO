@@ -66,12 +66,7 @@ Final evaluation metrics:
 
 This project was trained as an instance segmentation model. YOLO reports bounding-box metrics automatically because every segmentation mask also has an outer box. The inventory system mainly uses segmentation masks for visible item detection, slot assignment, and partial-visibility reasoning.
 
-Training plots and result files are available here:
 
-* [Model results](assets/model_results/)
-* [Training curves](assets/model_results/results.png)
-* [Confusion matrix](assets/model_results/confusion_matrix.png)
-* [Normalized confusion matrix](assets/model_results/confusion_matrix_normalized.png)
 
 ## Setup
 
