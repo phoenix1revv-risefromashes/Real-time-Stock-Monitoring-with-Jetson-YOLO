@@ -1,118 +1,117 @@
-# Edge Vision Inspection System
+# Real-time Stock Monitoring with YOLO Segmentation (EDGE AI)
 
-A real-time computer vision inspection prototype for detecting object presence across predefined shelf slots using OpenCV, Python, and camera input.
 
-The final version of this project will be a camera-based smart shelf inspection system that can monitor multiple shelf slots in real time and automatically report the condition of each slot. For each slot, the system will determine whether the slot is empty, occupied, low-stock, or potentially misplaced. The goal is to create an edge-deployable inspection system that can support inventory monitoring, restocking decisions, and visual shelf-status tracking without requiring manual checking.
+A camera-only shelf inventory monitoring prototype built with YOLO26s instance segmentation, OpenCV, and a live RGB camera feed.
 
-The current version uses manually defined shelf slots, OpenCV image preprocessing, Canny edge detection, and threshold-based classification.
+The system detects shelf slots, maps them with clean polygons, detects visible items, counts products per slot, compares the count against enrolled slot capacity, and displays real-time stock status. It does this without using a depth camera, RFID tags, weight sensors, or smart shelf hardware.
 
----
+[![System Architecture](assets/architecture/architecture.png)](assets/)
 
-## v0.8 Demo — Multi-Slot Object Detection
+<p align="center"><em>Click on the architecture diagram to watch the demo videos.</em></p>
 
-[![v0.4 Multi-Slot Object Detection Demo](assets/pictures/object_detection_in_multiple_slots.png)](assets/videos/)
 
-**Figure 1. v0.8 multi-slot object detection demo.**  
-The system detects object presence across multiple predefined shelf regions. In this output, slot **A1** is classified as empty, while **A2** and **A3** are detected as occupied. The display also shows the rendered resolution and camera FPS.
 
-_Click the image above to open the  video demos._
 
----
 
-## Current Status
+## What It Does
 
-## Current Status
+* Detects shelf slots
+* Converts shelf regions into clean slot polygons
+* Detects books and cans using YOLO26s segmentation
+* Assigns detected items to the correct shelf slot
+* Counts visible items per slot
+* Calculates stock level using item count and enrolled slot capacity
+* Detects mixed-item placement
+* Smooths item counts to reduce flickering
+* Shows live stock status with OpenCV overlays
 
-**Current Development Version:** v0.5  
-**Stable Released Version:** v0.4  
-**Status:** In Progress  
-**Current capability:** Config-based multi-slot object presence detection using predefined shelf regions.
+## Why This Project Matters
 
-The latest development version builds on the stable v0.4 multi-slot detection system. In v0.5, shelf slot coordinates and detection thresholds are moved out of the Python source code and into a YAML configuration file.
+Many shelf inventory systems depend on extra hardware such as depth cameras, RFID tags, smart shelves, or weight sensors.
 
-The system currently can:
+This project explores a cheaper approach: using a regular RGB camera with computer vision. It is not a finished commercial product, but it shows how a camera-only edge vision system can estimate shelf-level inventory status.
 
-- Open a live camera or video stream.
-- Display real-time video output.
-- Draw multiple predefined shelf slot regions on the frame.
-- Load slot definitions from `configs/shelf_slots.yaml`.
-- Load per-slot detection thresholds from `configs/shelf_slots.yaml`.
-- Analyze each slot independently.
-- Classify each slot as empty or detected/occupied.
-- Display slot labels and detection status directly on the video frame.
-- Show rendered resolution and FPS in the display window title.
-- Preserve the same detection behavior as v0.4 while making the system easier to configure and scale.
+## Stock Status Labels
 
-v0.5 testing compares the config-based implementation against the v0.4 baseline. Test notes are stored in:
+| Stock Level | Status                      |
+| ----------- | --------------------------- |
+| 0–20%       | Empty / Need Restock ASAP   |
+| 20–50%      | Low Stock / Restock Soon    |
+| 50–75%      | Partial / Light Restocking  |
+| 75–93%      | Almost Full / No Restocking |
+| 93–100%     | Full / No Restocking        |
 
-```text
-data/evidence/v0.5_test_notes.md
----
+## Model
+
+The project uses a custom YOLO26s instance segmentation model trained for:
+
+* book
+* can
+* shelf_base
+
+The dataset was built from 200 labeled shelf images and expanded using 3x augmentation. The augmentation included brightness, blur, grains and exposure variation to help the model handle different lighting conditions during live camera testing.
+
+Segmentation is used for visible item detection, slot matching, and partial visibility cases where products may block each other.
+
+## Model Evaluation Metrics
+
+The YOLO26s instance segmentation model was trained for 100 epochs on a custom shelf dataset.
+
+Final evaluation metrics:
+
+| Metric Type       | Precision | Recall |  mAP50 | mAP50-95 |
+| ----------------- | --------: | -----: | -----: | -------: |
+| Bounding Box      |    89.97% | 92.25% | 93.36% |   84.13% |
+| Segmentation Mask |    88.01% | 90.16% | 90.16% |   66.02% |
+
+This project was trained as an instance segmentation model. YOLO reports bounding-box metrics automatically because every segmentation mask also has an outer box. The inventory system mainly uses segmentation masks for visible item detection, slot assignment, and partial-visibility reasoning.
+
+Training plots and result files are available here:
+
+* [Model results](assets/model_results/)
+* [Training curves](assets/model_results/results.png)
+* [Confusion matrix](assets/model_results/confusion_matrix.png)
+* [Normalized confusion matrix](assets/model_results/confusion_matrix_normalized.png)
+
+## Setup
+
+Create and activate a virtual environment:
+
+```bash
+python3 -m venv .venv
+source .venv/bin/activate
 ```
 
-## Project Goal
+Install dependencies:
 
-The goal of this project is to build a real-time inspection system that can run on edge hardware such as an NVIDIA Jetson with a USB camera.
+```bash
+pip install -r requirements.txt
+pip install -e .
+```
 
-The long-term direction is to move from manually defined shelf slots toward a more automated shelf monitoring system that can support:
+## Running the Project
 
-- Empty slot detection
-- Object presence detection
-- Low-stock monitoring
-- Misplaced item detection
-- Camera-based inventory inspection
-- Edge deployment on Jetson hardware
+Enroll shelf slots:
 
----
+```bash
+python3 tools/enroll_shelf_base.py
+```
 
-## Hardware Used
+Enroll maximum item capacity for each slot:
 
-- NVIDIA Jetson Orin Nano
-- Logitech USB camera
-- Ubuntu/Linux development environment
+```bash
+python3 tools/enroll_slot_capacity.py
+```
 
-Development and testing may also be performed on a regular Ubuntu PC before deploying to the Jetson.
+Run live shelf monitoring:
 
----
+```bash
+python3 tools/live_stock_level_test.py
+```
 
-## Software Stack
 
-- Python
-- OpenCV
-- Linux
-- Git/GitHub
-- Virtual environment
-- Camera/video input processing
+## Notes
 
----
+The system estimates stock level from visible detections. A single camera cannot guarantee the count of fully hidden items.
 
-## Project Structure
-
-```text
-Edge-Vision-Inspection-System/
-│
-├── assets/
-│   ├── diagrams/
-│   ├── pictures/
-│   │   └── object_detection_in_multiple_slots.png
-│   └── videos/
-│       ├── v0.3: Occupancy Detection Demo.mp4
-│       └── v0.4 : Oobject_detection_in_multiple_slots.mp4
-│
-├── configs/
-│
-├── data/
-│   ├── evidence/
-│   ├── images/
-│   └── logs/
-│
-├── src/
-│   ├── camera.py
-│   ├── main.py
-│   └── shelf_config.py
-│
-├── tests/
-│
-├── .gitignore
-├── README.md
-└── requirements.txt
+For v1.0, the goal was to build a working prototype that connects computer vision detections to practical inventory decisions.
