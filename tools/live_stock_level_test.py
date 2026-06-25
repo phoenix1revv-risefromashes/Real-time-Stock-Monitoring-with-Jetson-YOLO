@@ -1,8 +1,10 @@
-from collections import deque
 from pathlib import Path
 from datetime import datetime
 import csv
 import json
+import time
+from collections import deque
+import statistics
 
 import cv2
 import numpy as np
@@ -23,10 +25,8 @@ FRAME_FPS = 30
 IMAGE_SIZE = 640
 CONFIDENCE = 0.25
 
-SHELF_CLASS = "shelf_base"
 ITEM_CLASSES = ["book", "can"]
 
-SMOOTHING_FRAMES = 10
 MIN_OVERLAP_PIXELS = 100
 MIN_ITEM_AREA_PIXELS = 300
 MAX_ITEM_TO_SLOT_AREA_RATIO = 0.90
@@ -39,6 +39,17 @@ ITEM_ROI_OFFSET_X = 0
 ITEM_ROI_OFFSET_Y = -120
 
 SLOT_OVERLAY_ALPHA = 0.12
+BLINK_INTERVAL_SECONDS = 0.5
+
+COUNT_DEBUG = True
+DEBUG_EVERY_N_FRAMES = 30
+
+# ── Temporal smoothing ────────────────────────────────────────────────────────
+# How many recent frames to keep per slot, per item class.
+# Larger  → smoother but slower to react to real changes.
+# Smaller → reacts faster but more flicker.
+SMOOTHING_WINDOW = 10        # frames
+# ─────────────────────────────────────────────────────────────────────────────
 
 
 def find_model_path():
@@ -63,11 +74,29 @@ def create_item_roi_polygon(base_polygon):
     return roi_hull.reshape(-1, 2)
 
 
+def read_max_item_capacity(slot):
+    if "max_item_capacity" not in slot:
+        raise KeyError(
+            f"Slot {slot['name']} is missing max_item_capacity. "
+            "Run: python3 tools/enroll_slot_capacity.py"
+        )
+
+    max_item_capacity = int(slot["max_item_capacity"])
+
+    if max_item_capacity <= 0:
+        raise ValueError(
+            f"Slot {slot['name']} has invalid max_item_capacity: "
+            f"{max_item_capacity}"
+        )
+
+    return max_item_capacity
+
+
 def load_reference_slots():
     if not REFERENCE_PATH.exists():
         raise FileNotFoundError(
             f"Missing reference file: {REFERENCE_PATH}. "
-            "Run tools/enroll_shelf_base.py first."
+            "Run shelf-base enrollment first."
         )
 
     with open(REFERENCE_PATH, "r") as file:
@@ -78,6 +107,7 @@ def load_reference_slots():
     for slot in reference_data["slots"]:
         base_polygon = np.array(slot["polygon"], dtype=np.int32)
         item_roi_polygon = create_item_roi_polygon(base_polygon)
+        max_item_capacity = read_max_item_capacity(slot)
 
         slots.append(
             {
@@ -87,19 +117,33 @@ def load_reference_slots():
                 "center_y": float(slot["center_y"]),
                 "polygon": base_polygon,
                 "item_roi_polygon": item_roi_polygon,
-                "reference_mask": None,
                 "item_roi_mask": None,
-                "current_area_pixels": 0.0,
-                "smoothed_area_pixels": 0.0,
+                "max_item_capacity": max_item_capacity,
                 "stock_percent": 0.0,
                 "stock_status": "Unknown",
                 "has_book": False,
                 "has_can": False,
+                "book_count": 0,
+                "can_count": 0,
+                "total_item_count": 0,
                 "item_type": "No Items",
+                # Rolling history buffers — one deque per item class
+                "_book_history": deque(maxlen=SMOOTHING_WINDOW),
+                "_can_history": deque(maxlen=SMOOTHING_WINDOW),
             }
         )
 
     return slots
+
+
+def print_slot_capacity_summary(slots):
+    print()
+    print("Loaded slot capacities:")
+
+    for slot in slots:
+        print(f"  {slot['name']}: max capacity = {slot['max_item_capacity']}")
+
+    print()
 
 
 def open_camera():
@@ -125,7 +169,6 @@ def create_polygon_mask(frame_shape, polygon):
 
 def prepare_reference_masks(slots, frame_shape):
     for slot in slots:
-        slot["reference_mask"] = create_polygon_mask(frame_shape, slot["polygon"])
         slot["item_roi_mask"] = create_polygon_mask(frame_shape, slot["item_roi_polygon"])
 
 
@@ -174,7 +217,7 @@ def extract_detections(result, roi_offset):
         class_name = result.names[class_id]
         confidence = float(box.conf[0].item())
 
-        if class_name != SHELF_CLASS and class_name not in ITEM_CLASSES:
+        if class_name not in ITEM_CLASSES:
             continue
 
         polygon_points = result.masks.xy[index]
@@ -212,33 +255,14 @@ def extract_detections(result, roi_offset):
 
 
 def reset_live_slot_values(slots):
+    """Reset only the raw per-frame counts; history buffers are preserved."""
     for slot in slots:
-        slot["current_area_pixels"] = 0.0
         slot["has_book"] = False
         slot["has_can"] = False
+        slot["book_count"] = 0
+        slot["can_count"] = 0
+        slot["total_item_count"] = 0
         slot["item_type"] = "No Items"
-
-
-def match_shelf_base_to_slots(detections, slots, frame_shape):
-    for detection in detections:
-        if detection["class_name"] != SHELF_CLASS:
-            continue
-
-        detection_mask = create_polygon_mask(frame_shape, detection["polygon"])
-
-        best_slot = None
-        best_overlap_area = 0
-
-        for slot in slots:
-            overlap_mask = cv2.bitwise_and(detection_mask, slot["reference_mask"])
-            overlap_area = int(cv2.countNonZero(overlap_mask))
-
-            if overlap_area > best_overlap_area:
-                best_overlap_area = overlap_area
-                best_slot = slot
-
-        if best_slot is not None and best_overlap_area > MIN_OVERLAP_PIXELS:
-            best_slot["current_area_pixels"] += float(best_overlap_area)
 
 
 def point_inside_mask(mask, x, y):
@@ -255,9 +279,6 @@ def point_inside_mask(mask, x, y):
 
 def match_items_to_slots(detections, slots, frame_shape):
     for detection in detections:
-        if detection["class_name"] not in ITEM_CLASSES:
-            continue
-
         if detection["area_pixels"] < MIN_ITEM_AREA_PIXELS:
             continue
 
@@ -297,10 +318,35 @@ def match_items_to_slots(detections, slots, frame_shape):
             continue
 
         if detection["class_name"] == "book":
-            best_slot["has_book"] = True
+            best_slot["book_count"] += 1
 
         elif detection["class_name"] == "can":
-            best_slot["has_can"] = True
+            best_slot["can_count"] += 1
+
+        best_slot["total_item_count"] = best_slot["book_count"] + best_slot["can_count"]
+
+
+def smooth_slot_counts(slots):
+    """
+    Push this frame's raw counts into each slot's history deque, then
+    replace the live counts with the median over the window.
+
+    Median is used instead of mean because it ignores outlier frames where
+    YOLO momentarily misses one item (e.g. full shelf reads 9 instead of 10),
+    which is the root cause of the "Full ↔ Almost Full" flicker.
+    """
+    for slot in slots:
+        slot["_book_history"].append(slot["book_count"])
+        slot["_can_history"].append(slot["can_count"])
+
+        smoothed_books = round(statistics.median(slot["_book_history"]))
+        smoothed_cans  = round(statistics.median(slot["_can_history"]))
+
+        slot["book_count"]       = smoothed_books
+        slot["can_count"]        = smoothed_cans
+        slot["total_item_count"] = smoothed_books + smoothed_cans
+        slot["has_book"]         = smoothed_books > 0
+        slot["has_can"]          = smoothed_cans  > 0
 
 
 def clamp(value, minimum, maximum):
@@ -358,29 +404,42 @@ def get_slot_color(slot):
     return (255, 255, 255)
 
 
-def update_stock_levels(slots, histories):
+def slot_should_blink_red(slot):
+    if slot["item_type"] == "Mixed Items":
+        return True
+
+    if slot["stock_status"] == "Empty / Need Restock ASAP":
+        return True
+
+    if slot["stock_status"] == "Low Stock / Restock Soon":
+        return True
+
+    return False
+
+
+def get_display_color(slot):
+    if slot_should_blink_red(slot):
+        blink_on = int(time.time() / BLINK_INTERVAL_SECONDS) % 2 == 0
+
+        if blink_on:
+            return (0, 0, 255)
+
+        return (45, 45, 45)
+
+    return get_slot_color(slot)
+
+
+def update_stock_levels(slots):
     for slot in slots:
-        reference_area = slot["reference_area_pixels"]
-        current_area = clamp(slot["current_area_pixels"], 0.0, reference_area)
+        max_capacity = max(1, int(slot["max_item_capacity"]))
+        total_items = int(slot["total_item_count"])
 
-        histories[slot["name"]].append(current_area)
+        stock_percent = clamp(
+            (total_items / max_capacity) * 100.0,
+            0.0,
+            100.0,
+        )
 
-        smoothed_area = sum(histories[slot["name"]]) / len(histories[slot["name"]])
-
-        visible_ratio = smoothed_area / reference_area
-        stock_ratio = 1.0 - visible_ratio
-        raw_stock_percent = clamp(stock_ratio * 100.0, 0.0, 100.0)
-
-        if raw_stock_percent <= EMPTY_DEADBAND_PERCENT:
-            stock_percent = 0.0
-        else:
-            stock_percent = clamp(
-                raw_stock_percent + STOCK_PERCENT_OFFSET,
-                0.0,
-                100.0,
-            )
-
-        slot["smoothed_area_pixels"] = smoothed_area
         slot["stock_percent"] = stock_percent
         slot["stock_status"] = get_stock_status(stock_percent)
         slot["item_type"] = get_item_type(slot["has_book"], slot["has_can"])
@@ -487,9 +546,9 @@ def log_slot_events(slots, previous_slot_states):
 
 def draw_text_block(frame, lines, x, y, color):
     font = cv2.FONT_HERSHEY_SIMPLEX
-    font_scale = 0.62
+    font_scale = 0.58
     thickness = 2
-    line_height = 28
+    line_height = 27
 
     for index, line in enumerate(lines):
         text_y = int(y + index * line_height)
@@ -519,7 +578,7 @@ def draw_slot_results(frame, slots):
     overlay = frame.copy()
 
     for slot in slots:
-        color = get_slot_color(slot)
+        color = get_display_color(slot)
         cv2.fillPoly(overlay, [slot["polygon"]], color)
 
     display_frame = cv2.addWeighted(
@@ -531,7 +590,7 @@ def draw_slot_results(frame, slots):
     )
 
     for slot in slots:
-        color = get_slot_color(slot)
+        color = get_display_color(slot)
 
         cv2.polylines(display_frame, [slot["polygon"]], True, color, 3)
 
@@ -539,6 +598,7 @@ def draw_slot_results(frame, slots):
             f"{slot['name']}",
             f"Stock level: {slot['stock_percent']:.1f}% | {slot['stock_status']}",
             f"Type: {slot['item_type']}",
+            f"Items: {slot['total_item_count']} / {slot['max_item_capacity']}",
         ]
 
         x = int(slot["center_x"]) - 190
@@ -564,11 +624,11 @@ def main():
     model = YOLO(str(model_path))
 
     slots = load_reference_slots()
+    print_slot_capacity_summary(slots)
 
-    histories = {
-        slot["name"]: deque(maxlen=SMOOTHING_FRAMES)
-        for slot in slots
-    }
+    previous_slot_states = {}
+
+    ensure_event_log_file()
 
     previous_slot_states = {}
 
@@ -578,6 +638,7 @@ def main():
 
     reference_masks_ready = False
     processing_roi = None
+    frame_index = 0
 
     print(f"Using model: {model_path}")
     print(f"Using reference: {REFERENCE_PATH}")
@@ -591,6 +652,8 @@ def main():
         if not success:
             print("Could not read frame.")
             break
+
+        frame_index += 1
 
         if not reference_masks_ready:
             prepare_reference_masks(slots, frame.shape)
@@ -611,7 +674,6 @@ def main():
         detections = extract_detections(results[0], (roi_x1, roi_y1))
 
         reset_live_slot_values(slots)
-        match_shelf_base_to_slots(detections, slots, frame.shape)
         match_items_to_slots(detections, slots, frame.shape)
         update_stock_levels(slots, histories)
         log_slot_events(slots, previous_slot_states)
