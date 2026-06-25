@@ -1,0 +1,5 @@
+Metadata-Version: 2.4
+Name: edge-vision-inventory
+Version: 1.0.0
+Summary: Camera-only shelf inventory monitoring system using YOLO segmentation and OpenCV.
+Requires-Python: >=3.10

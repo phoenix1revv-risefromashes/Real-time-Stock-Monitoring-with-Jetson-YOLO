@@ -1,0 +1,10 @@
+README.md
+pyproject.toml
+src/edge_vision_inventory/__init__.py
+src/edge_vision_inventory/enroll_shelf_base.py
+src/edge_vision_inventory/enroll_slot_capacity.py
+src/edge_vision_inventory/live_monitor.py
+src/edge_vision_inventory.egg-info/PKG-INFO
+src/edge_vision_inventory.egg-info/SOURCES.txt
+src/edge_vision_inventory.egg-info/dependency_links.txt
+src/edge_vision_inventory.egg-info/top_level.txt
