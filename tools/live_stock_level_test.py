@@ -1,4 +1,6 @@
 from pathlib import Path
+from datetime import datetime
+import csv
 import json
 import time
 from collections import deque
@@ -11,6 +13,9 @@ from ultralytics import YOLO
 
 MODEL_DIR = Path("model")
 REFERENCE_PATH = Path("configs/shelf_base_reference.json")
+
+LOG_DIR = Path("logs")
+EVENT_LOG_PATH = LOG_DIR / "live_stock_events.csv"
 
 CAMERA_INDEX = 0
 FRAME_WIDTH = 1920
@@ -27,12 +32,6 @@ MIN_ITEM_AREA_PIXELS = 300
 MAX_ITEM_TO_SLOT_AREA_RATIO = 0.90
 ROI_PADDING = 40
 
-<<<<<<< Updated upstream
-STOCK_PERCENT_OFFSET = 10.0
-EMPTY_DEADBAND_PERCENT = 10.0
-
-=======
->>>>>>> Stashed changes
 ITEM_ROI_OFFSET_X = 0
 ITEM_ROI_OFFSET_Y = -120
 
@@ -46,7 +45,7 @@ DEBUG_EVERY_N_FRAMES = 30
 # How many recent frames to keep per slot, per item class.
 # Larger  → smoother but slower to react to real changes.
 # Smaller → reacts faster but more flicker.
-SMOOTHING_WINDOW = 15        # frames
+SMOOTHING_WINDOW = 10        # frames
 # ─────────────────────────────────────────────────────────────────────────────
 
 
@@ -327,7 +326,11 @@ def match_items_to_slots(detections, slots, frame_shape):
 def smooth_slot_counts(slots):
     """
     Push this frame's raw counts into each slot's history deque, then
-    replace the live counts with the median over the window..
+    replace the live counts with the median over the window.
+
+    Median is used instead of mean because it ignores outlier frames where
+    YOLO momentarily misses one item (e.g. full shelf reads 9 instead of 10),
+    which is the root cause of the "Full ↔ Almost Full" flicker.
     """
     for slot in slots:
         slot["_book_history"].append(slot["book_count"])
@@ -378,24 +381,24 @@ def get_item_type(has_book, has_can):
 
 def get_slot_color(slot):
     if slot["item_type"] == "Mixed Items":
-        return (0, 0, 255)        # Red
+        return (0, 0, 255)
 
     if slot["stock_status"] == "Empty / Need Restock ASAP":
-        return (0, 0, 255)        # Red
+        return (0, 0, 255)
 
     if slot["stock_status"] == "Low Stock / Restock Soon":
-        return (0, 255, 255)      # Yellow
+        return (0, 255, 255)
 
     if slot["stock_status"] == "Partial / Light Restocking":
-        return (0, 165, 255)      # Orange
+        return (0, 165, 255)
 
     if slot["stock_status"] == "Almost Full / No Restocking":
-        return (255, 0, 0)        # Blue
+        return (255, 0, 0)
 
     if slot["stock_status"] == "Full / No Restocking":
-        return (0, 255, 0)        # Green
+        return (0, 255, 0)
 
-    return (255, 255, 255)        # White fallback
+    return (255, 255, 255)
 
 
 def slot_should_blink_red(slot):
@@ -439,8 +442,6 @@ def update_stock_levels(slots):
         slot["item_type"] = get_item_type(slot["has_book"], slot["has_can"])
 
 
-<<<<<<< Updated upstream
-=======
 def ensure_event_log_file():
     LOG_DIR.mkdir(parents=True, exist_ok=True)
 
@@ -583,7 +584,6 @@ def print_count_debug(frame_index, detections, slots):
         )
 
 
->>>>>>> Stashed changes
 def draw_text_block(frame, lines, x, y, color):
     font = cv2.FONT_HERSHEY_SIMPLEX
     font_scale = 0.58
@@ -666,6 +666,10 @@ def main():
     slots = load_reference_slots()
     print_slot_capacity_summary(slots)
 
+    previous_slot_states = {}
+
+    ensure_event_log_file()
+
     camera = open_camera()
 
     reference_masks_ready = False
@@ -674,11 +678,8 @@ def main():
 
     print(f"Using model: {model_path}")
     print(f"Using reference: {REFERENCE_PATH}")
-<<<<<<< Updated upstream
-=======
     print(f"Logging events to: {EVENT_LOG_PATH}")
     print(f"Temporal smoothing window: {SMOOTHING_WINDOW} frames")
->>>>>>> Stashed changes
     print("Processing only enrolled shelf/item ROI.")
     print("Press 'q' to quit.")
 
@@ -711,14 +712,10 @@ def main():
 
         reset_live_slot_values(slots)
         match_items_to_slots(detections, slots, frame.shape)
-<<<<<<< Updated upstream
-        update_stock_levels(slots, histories)
-=======
         smooth_slot_counts(slots)          # ← stabilise counts before scoring
         update_stock_levels(slots)
         log_slot_events(slots, previous_slot_states)
         print_count_debug(frame_index, detections, slots)
->>>>>>> Stashed changes
 
         display_frame = draw_slot_results(frame, slots)
 
