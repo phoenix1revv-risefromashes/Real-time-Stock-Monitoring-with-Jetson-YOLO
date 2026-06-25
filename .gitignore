@@ -66,5 +66,5 @@ data/evidence/
 
 #logs
 
-logs/*.csv
-!logs/.gitkeep
+data/logs/*.csv
+!data/logs/.gitkeep
