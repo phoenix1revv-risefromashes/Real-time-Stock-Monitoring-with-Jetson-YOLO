@@ -1,5 +1,6 @@
 # Real-time Stock Monitoring with YOLO Segmentation (EDGE AI)
 
+[![CI](https://github.com/phoenix1revv-risefromashes/Real-time-Stock-Monitoring-with-Jetson-YOLO/actions/workflows/ci.yml/badge.svg)](https://github.com/phoenix1revv-risefromashes/Real-time-Stock-Monitoring-with-Jetson-YOLO/actions/workflows/ci.yml)
 
 A camera-only shelf inventory monitoring prototype built with YOLO26s instance segmentation, OpenCV, and a live RGB camera feed.
 
