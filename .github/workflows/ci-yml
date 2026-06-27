@@ -1,0 +1,163 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+
+jobs:
+  lint:
+    name: Lint
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.10"
+
+      - name: Install linting tools
+        run: pip install flake8
+
+      - name: Lint with flake8
+        run: |
+          flake8 src/ tools/ \
+            --max-line-length=160 \
+            --ignore=E101,E201,E203,E211,E222,E225,E226,E231,E251,E265,E301,E302,E303,E402,E501,F541,F811,W291,W292,W293,W391,W503,W504 \
+            --count --statistics
+
+  validate:
+    name: Validate Structure & Config
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.10"
+
+      - name: Install lightweight deps
+        run: pip install pyyaml numpy
+
+      - name: Check source module syntax
+        run: |
+          python -m py_compile src/camera.py
+          python -m py_compile src/detection_logger.py
+          python -m py_compile src/evidence_capture.py
+          python -m py_compile src/shelf_config.py
+          python -m py_compile src/main.py
+          python -m py_compile src/edge_vision_inventory/enroll_shelf_base.py
+          python -m py_compile src/edge_vision_inventory/enroll_slot_capacity.py
+          python -m py_compile src/edge_vision_inventory/live_monitor.py
+          echo "All source modules passed syntax check"
+
+      - name: Check tools syntax
+        run: |
+          for f in tools/*.py; do
+            python -m py_compile "$f" && echo "OK: $f"
+          done
+
+      - name: Validate shelf slot config
+        run: |
+          python - <<'EOF'
+          import yaml, sys
+
+          with open("configs/shelf_slots.yaml") as f:
+              cfg = yaml.safe_load(f)
+
+          assert "slots" in cfg, "Missing 'slots' key in shelf_slots.yaml"
+
+          required_fields = ["name", "x", "y", "width", "height", "threshold"]
+          for slot in cfg["slots"]:
+              missing = [k for k in required_fields if k not in slot]
+              if missing:
+                  print(f"Slot '{slot.get('name', '?')}' missing fields: {missing}")
+                  sys.exit(1)
+              assert slot["threshold"] > 0, \
+                  f"Slot '{slot['name']}' has non-positive threshold"
+
+          print(f"shelf_slots.yaml valid — {len(cfg['slots'])} slot(s) configured: "
+                f"{[s['name'] for s in cfg['slots']]}")
+          EOF
+
+      - name: Validate dataset config
+        run: |
+          python - <<'EOF'
+          import yaml, sys
+
+          with open("data/dataset/processed/data.yaml") as f:
+              cfg = yaml.safe_load(f)
+
+          required = ["path", "train", "val", "nc", "names"]
+          missing = [k for k in required if k not in cfg]
+          if missing:
+              print(f"Missing keys in data.yaml: {missing}")
+              sys.exit(1)
+
+          assert cfg["nc"] == len(cfg["names"]), \
+              f"nc={cfg['nc']} does not match {len(cfg['names'])} class names"
+
+          print(f"data.yaml valid — {cfg['nc']} class(es): {cfg['names']}")
+          EOF
+
+      - name: Validate shelf base reference config
+        run: |
+          python - <<'EOF'
+          import json, sys
+
+          with open("configs/shelf_base_reference.json") as f:
+              ref = json.load(f)
+
+          assert isinstance(ref, (dict, list)), \
+              "shelf_base_reference.json must be a JSON object or array"
+
+          print(f"shelf_base_reference.json valid — top-level type: {type(ref).__name__}")
+          EOF
+
+      - name: Verify project structure
+        run: |
+          python - <<'EOF'
+          import os, sys
+
+          required = [
+              "src/main.py",
+              "src/camera.py",
+              "src/detection_logger.py",
+              "src/evidence_capture.py",
+              "src/shelf_config.py",
+              "src/edge_vision_inventory/live_monitor.py",
+              "src/edge_vision_inventory/enroll_shelf_base.py",
+              "configs/shelf_slots.yaml",
+              "configs/shelf_base_reference.json",
+              "requirements.txt",
+              "pyproject.toml",
+          ]
+
+          missing = [p for p in required if not os.path.exists(p)]
+          if missing:
+              print("Missing files:")
+              for p in missing:
+                  print(f"  {p}")
+              sys.exit(1)
+
+          print(f"Project structure OK — {len(required)} paths verified")
+          EOF
+
+      - name: Validate pyproject.toml
+        run: |
+          python - <<'EOF'
+          import tomllib, sys
+
+          with open("pyproject.toml", "rb") as f:
+              cfg = tomllib.load(f)
+
+          assert "project" in cfg, "Missing [project] table"
+          assert "name" in cfg["project"], "Missing project.name"
+          assert cfg["project"].get("requires-python"), "Missing requires-python"
+
+          print(f"pyproject.toml valid — package: {cfg['project']['name']} "
+                f"v{cfg['project'].get('version', '?')}")
+          EOF
