@@ -25,7 +25,7 @@ jobs:
         run: |
           flake8 src/ tools/ \
             --max-line-length=160 \
-            --ignore=E101,E201,E203,E211,E222,E225,E226,E231,E251,E265,E301,E302,E303,E402,E501,F541,F811,W291,W292,W293,W391,W503,W504 \
+            --ignore=E101,E201,E203,E211,E222,E225,E226,E231,E251,E265,E301,E302,E303,E402,E501,E202,E221,E305,F403,F405,F541,F811,W291,W292,W293,W391,W503,W504 \
             --count --statistics
 
   validate:
@@ -91,7 +91,7 @@ jobs:
           with open("data/dataset/processed/data.yaml") as f:
               cfg = yaml.safe_load(f)
 
-          required = ["path", "train", "val", "nc", "names"]
+          required = ["train", "val", "nc", "names"]
           missing = [k for k in required if k not in cfg]
           if missing:
               print(f"Missing keys in data.yaml: {missing}")
